@@ -1,5 +1,9 @@
 # clap-trap
 
+[![CI](https://github.com/dfl/clap-trap/actions/workflows/ci.yml/badge.svg)](https://github.com/dfl/clap-trap/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/v/release/dfl/clap-trap)](https://github.com/dfl/clap-trap/releases)
+
 A minimal headless CLAP host library for testing and validating audio plugins.
 
 *It's a trap! ...for catching CLAP plugin bugs.*

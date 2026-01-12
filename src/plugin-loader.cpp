@@ -7,6 +7,8 @@
 #include "clap-trap/plugin-loader.h"
 #include <cstring>
 
+#include "wclap-bridge/wclap-bridge.h"
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -31,16 +33,20 @@ PluginLoader::~PluginLoader() {
 #else
         dlclose(handle_);
 #endif
+    } else if (wclap_) {
+        wclap_close(wclap_);
     }
 }
 
 PluginLoader::PluginLoader(PluginLoader&& other) noexcept
     : handle_(other.handle_)
+    , wclap_(other.wclap_)
     , entry_(other.entry_)
     , path_(std::move(other.path_))
     , error_(std::move(other.error_))
     , initialized_(other.initialized_) {
     other.handle_ = nullptr;
+    other.wclap_ = nullptr;
     other.entry_ = nullptr;
     other.initialized_ = false;
 }
@@ -57,16 +63,20 @@ PluginLoader& PluginLoader::operator=(PluginLoader&& other) noexcept {
 #else
             dlclose(handle_);
 #endif
+        } else if (wclap_) {
+            wclap_close(wclap_);
         }
 
         // Move from other
         handle_ = other.handle_;
+        wclap_ = other.wclap_;
         entry_ = other.entry_;
         path_ = std::move(other.path_);
         error_ = std::move(other.error_);
         initialized_ = other.initialized_;
 
         other.handle_ = nullptr;
+        other.wclap_ = nullptr;
         other.entry_ = nullptr;
         other.initialized_ = false;
     }
@@ -145,7 +155,21 @@ std::unique_ptr<PluginLoader> PluginLoader::load(const std::string& path) {
     return loader;
 }
 
+std::unique_ptr<PluginLoader> PluginLoader::loadWclap(const std::string& path) {
+    auto loader = std::unique_ptr<PluginLoader>(new PluginLoader());
+    loader->path_ = path;
+
+    loader->wclap_ = wclap_open(path);
+
+    char errorMessage[256] = {};
+    if (wclap_get_error(loader->wclap_, errorMessage, 255)) {
+        loader->error_ = errorMessage;
+    }
+}
+    
 const clap_plugin_factory_t* PluginLoader::factory() const {
+    if (wclap_) return static_cast<const clap_plugin_factory_t*>(
+        wclap_get_factory(wclap_, CLAP_PLUGIN_FACTORY_ID));
     if (!entry_) return nullptr;
     return static_cast<const clap_plugin_factory_t*>(
         entry_->get_factory(CLAP_PLUGIN_FACTORY_ID));

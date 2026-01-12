@@ -49,6 +49,11 @@ target_include_directories(clap-trap PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+# On Windows, rename library to avoid conflict with CLI's import lib
+if(WIN32)
+    set_target_properties(clap-trap PROPERTIES OUTPUT_NAME clap-trap-lib)
+endif()
+
 target_link_libraries(clap-trap PUBLIC clap)
 
 # Optional WASM support via wclap-bridge
@@ -69,9 +74,9 @@ endif()
 
 # CLI tool
 if(CLAP_TRAP_BUILD_EXAMPLES)
-    add_executable(clap-trap-bin examples/cli.cpp)
-    set_target_properties(clap-trap-bin PROPERTIES OUTPUT_NAME clap-trap)
-    target_link_libraries(clap-trap-bin PRIVATE clap-trap)
+    add_executable(clap-trap-cli examples/cli.cpp)
+    set_target_properties(clap-trap-cli PROPERTIES OUTPUT_NAME clap-trap)
+    target_link_libraries(clap-trap-cli PRIVATE clap-trap)
 endif()
 
 # Tests

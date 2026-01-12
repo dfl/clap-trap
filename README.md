@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/v/release/dfl/clap-trap)](https://github.com/dfl/clap-trap/releases)
 
-A minimal headless CLAP host library for testing and validating audio plugins.
+A C++ test harness for CLAP hosts, bridges, and loaders. Also useful if you're the kind of plugin developer who writes integration tests (you should be, but we know you don't).
 
 *It's a trap! ...for catching CLAP plugin bugs.*
 
@@ -110,15 +110,15 @@ target_link_libraries(your-target PRIVATE clap-trap)
 
 ## How is this different from clap-validator?
 
-[clap-validator](https://github.com/free-audio/clap-validator) is a comprehensive validation suite that checks CLAP spec compliance with hundreds of tests.
+[clap-validator](https://github.com/free-audio/clap-validator) is a Rust CLI that checks CLAP spec compliance. It's great. Use it.
 
-**clap-trap** is simpler and different:
-- **Library-first**: Designed to be embedded in your test suite, not just run as a CLI
-- **Lightweight**: Minimal dependencies, fast compile times
-- **Flexible**: You write the tests, controlling exactly what gets validated
-- **Integration testing**: Focused on "does the plugin work?" not "is it spec-compliant?"
+**clap-trap** is a C++ library for writing your own tests:
+- Test your **host** against plugins
+- Test your **bridge** (like [wclap-bridge](https://github.com/WebCLAP/wclap-bridge))
+- Test your **plugin loader**
+- Write regression tests for specific bugs
 
-Use **clap-validator** to check spec compliance. Use **clap-trap** to write integration tests for your plugin or host.
+If you're a plugin developer, run clap-validator before release. If you're building infrastructure that *loads* plugins, use clap-trap to test it.
 
 ## License
 

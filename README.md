@@ -72,17 +72,28 @@ plugin->deactivate(plugin);
 plugin->destroy(plugin);
 ```
 
-### Command-Line Validation
+### Command-Line Tool
 
 ```bash
-./clap-trap-cli /path/to/plugin.clap
+# Basic smoke test
+clap-trap-cli validate /path/to/plugin.clap
+
+# Detailed plugin information
+clap-trap-cli info /path/to/plugin.clap
+
+# Benchmark performance
+clap-trap-cli bench /path/to/plugin.clap --blocks 10000
 ```
 
-This tests:
-- Plugin loads successfully
-- Factory returns valid descriptors
-- Full lifecycle: init → activate → process → deactivate → destroy
-- Output contains valid samples (no NaN/Inf)
+**Commands:**
+- `validate` - Load, process 10 blocks, destroy. Checks for crashes and NaN/Inf output.
+- `info` - Dump plugin details: parameters, audio ports, note ports, extensions.
+- `bench` - Measure realtime performance (e.g., "3500x realtime, 1.5 µs/block").
+
+**Options:**
+- `--blocks N` - Number of blocks to process
+- `--buffer-size N` - Buffer size in samples (default: 256)
+- `--sample-rate N` - Sample rate in Hz (default: 48000)
 
 ## Building
 

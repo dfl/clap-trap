@@ -40,7 +40,7 @@ endif()
 
 # Examples
 if(CLAP_TRAP_BUILD_EXAMPLES)
-    add_executable(clap-trap-cli examples/validate.cpp)
+    add_executable(clap-trap-cli examples/cli.cpp)
     target_link_libraries(clap-trap-cli PRIVATE clap-trap)
 endif()
 

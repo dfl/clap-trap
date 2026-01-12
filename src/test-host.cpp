@@ -16,7 +16,7 @@ TestHost::TestHost(const char* name, const char* vendor, const char* version) {
     host_.host_data = this;
     host_.name = name;
     host_.vendor = vendor;
-    host_.url = "https://github.com/WebCLAP/clap-trap";
+    host_.url = "https://github.com/dfl/clap-trap";
     host_.version = version;
     host_.get_extension = hostGetExtension;
     host_.request_restart = hostRequestRestart;

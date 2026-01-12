@@ -96,7 +96,7 @@ cmake --build .
 ```cmake
 FetchContent_Declare(
     clap-trap
-    GIT_REPOSITORY https://github.com/WebCLAP/clap-trap.git
+    GIT_REPOSITORY https://github.com/dfl/clap-trap.git
     GIT_TAG v0.1.0
 )
 FetchContent_MakeAvailable(clap-trap)

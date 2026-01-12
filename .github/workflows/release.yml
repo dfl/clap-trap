@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: clap-trap-linux-x64
+          - os: macos-latest
+            artifact: clap-trap-macos-universal
+          - os: windows-latest
+            artifact: clap-trap-windows-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake (macOS universal)
+        if: matrix.os == 'macos-latest'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCLAP_TRAP_BUILD_TESTS=OFF
+
+      - name: Configure CMake (other)
+        if: matrix.os != 'macos-latest'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p dist
+          cp build/clap-trap-cli dist/
+          cp build/libclap-trap.a dist/ || true
+          cp -r include dist/
+          cp README.md LICENSE dist/
+          cd dist && tar -czvf ../${{ matrix.artifact }}.tar.gz *
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/Release/clap-trap-cli.exe dist/
+          cp build/Release/clap-trap.lib dist/ || true
+          cp -r include dist/
+          cp README.md LICENSE dist/
+          cd dist && 7z a -tzip ../${{ matrix.artifact }}.zip *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

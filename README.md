@@ -73,7 +73,7 @@ plugin->destroy(plugin);
 ### Command-Line Validation
 
 ```bash
-./clap-validate /path/to/plugin.clap
+./clap-trap-cli /path/to/plugin.clap
 ```
 
 This tests:
@@ -107,6 +107,18 @@ FetchContent_MakeAvailable(clap-trap)
 
 target_link_libraries(your-target PRIVATE clap-trap)
 ```
+
+## How is this different from clap-validator?
+
+[clap-validator](https://github.com/free-audio/clap-validator) is a comprehensive validation suite that checks CLAP spec compliance with hundreds of tests.
+
+**clap-trap** is simpler and different:
+- **Library-first**: Designed to be embedded in your test suite, not just run as a CLI
+- **Lightweight**: Minimal dependencies, fast compile times
+- **Flexible**: You write the tests, controlling exactly what gets validated
+- **Integration testing**: Focused on "does the plugin work?" not "is it spec-compliant?"
+
+Use **clap-validator** to check spec compliance. Use **clap-trap** to write integration tests for your plugin or host.
 
 ## License
 

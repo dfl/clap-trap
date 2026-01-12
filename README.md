@@ -106,4 +106,4 @@ target_link_libraries(your-target PRIVATE clap-trap)
 
 ## License
 
-Boost Software License 1.0
+MIT

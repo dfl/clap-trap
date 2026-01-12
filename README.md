@@ -114,13 +114,12 @@ target_link_libraries(your-target PRIVATE clap-trap)
 
 [clap-validator](https://github.com/free-audio/clap-validator) is a Rust CLI that checks CLAP spec compliance. It's great. Use it.
 
-**clap-trap** is a C++ library for writing your own tests:
-- Test your **host** against plugins
-- Test your **bridge** (like [wclap-bridge](https://github.com/WebCLAP/wclap-bridge))
-- Test your **plugin loader**
-- Write regression tests for specific bugs
+**clap-trap** is a C++ headless host for writing your own tests:
+- **Plugin developers**: Test your plugin without spinning up a DAW
+- **Bridge developers**: Verify your bridge works (e.g., [wclap-bridge](https://github.com/WebCLAP/wclap-bridge))
+- **CI pipelines**: Automated smoke tests before release
 
-If you're a plugin developer, run clap-validator before release. If you're building infrastructure that *loads* plugins, use clap-trap to test it.
+Use clap-validator for spec compliance. Use clap-trap for integration testing.
 
 ## License
 

@@ -4,7 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/v/release/dfl/clap-trap)](https://github.com/dfl/clap-trap/releases)
 
-A C++ test harness for CLAP hosts, bridges, and loaders. Also useful if you're the kind of plugin developer who writes integration tests (you should be, but we know you don't).
+A minimal headless CLAP host for automated testing. Load plugins, process audio, check outputs—no DAW required.
+
+Also useful if you're the kind of plugin developer who writes integration tests (you should be, but we know you don't).
 
 *It's a trap! ...for catching CLAP plugin bugs.*
 

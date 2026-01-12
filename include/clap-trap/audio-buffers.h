@@ -1,5 +1,5 @@
 /**
- * clap-headless-host: Audio Buffers
+ * clap-trap: Audio Buffers
  *
  * Helper classes for managing audio buffers in tests.
  */
@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace clap_headless {
+namespace clap_trap {
 
 /**
  * Manages stereo audio buffers for testing.
@@ -101,4 +101,4 @@ private:
     clap_audio_buffer_t outputBuffer_;
 };
 
-} // namespace clap_headless
+} // namespace clap_trap

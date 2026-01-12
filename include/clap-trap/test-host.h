@@ -1,5 +1,5 @@
 /**
- * clap-headless-host: Test Host
+ * clap-trap: Test Host
  *
  * Minimal CLAP host implementation for headless testing.
  */
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace clap_headless {
+namespace clap_trap {
 
 /**
  * Minimal CLAP host implementation for testing.
@@ -22,8 +22,8 @@ namespace clap_headless {
  */
 class TestHost {
 public:
-    TestHost(const char* name = "clap-headless-host",
-             const char* vendor = "clap-headless-host",
+    TestHost(const char* name = "clap-trap",
+             const char* vendor = "clap-trap",
              const char* version = "1.0.0");
 
     /// Get the clap_host_t pointer to pass to plugins
@@ -114,4 +114,4 @@ private:
     static const clap_event_header_t* getEvent(const clap_input_events_t* list, uint32_t index);
 };
 
-} // namespace clap_headless
+} // namespace clap_trap

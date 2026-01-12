@@ -1,11 +1,11 @@
 /**
- * clap-headless-host: Test Host Implementation
+ * clap-trap: Test Host Implementation
  */
 
-#include "clap-headless-host/test-host.h"
+#include "clap-trap/test-host.h"
 #include <cstring>
 
-namespace clap_headless {
+namespace clap_trap {
 
 //-----------------------------------------------------------------------------
 // TestHost
@@ -16,7 +16,7 @@ TestHost::TestHost(const char* name, const char* vendor, const char* version) {
     host_.host_data = this;
     host_.name = name;
     host_.vendor = vendor;
-    host_.url = "https://github.com/WebCLAP/clap-headless-host";
+    host_.url = "https://github.com/WebCLAP/clap-trap";
     host_.version = version;
     host_.get_extension = hostGetExtension;
     host_.request_restart = hostRequestRestart;
@@ -163,4 +163,4 @@ const clap_event_header_t* SimpleInputEvents::getEvent(const clap_input_events_t
     return self->eventPtrs_[index];
 }
 
-} // namespace clap_headless
+} // namespace clap_trap

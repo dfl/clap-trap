@@ -1,5 +1,5 @@
 /**
- * clap-headless-host: Plugin Loader
+ * clap-trap: Plugin Loader
  *
  * Platform-agnostic CLAP plugin loading via dlopen/LoadLibrary
  */
@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-namespace clap_headless {
+namespace clap_trap {
 
 /**
  * Loads a native CLAP plugin from disk.
@@ -67,4 +67,4 @@ private:
     bool initialized_ = false;
 };
 
-} // namespace clap_headless
+} // namespace clap_trap

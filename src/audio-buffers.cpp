@@ -1,12 +1,12 @@
 /**
- * clap-headless-host: Audio Buffers Implementation
+ * clap-trap: Audio Buffers Implementation
  */
 
-#include "clap-headless-host/audio-buffers.h"
+#include "clap-trap/audio-buffers.h"
 #include <algorithm>
 #include <cmath>
 
-namespace clap_headless {
+namespace clap_trap {
 
 //-----------------------------------------------------------------------------
 // StereoAudioBuffers
@@ -147,4 +147,4 @@ bool AudioBuffers::outputIsValid() const {
     return true;
 }
 
-} // namespace clap_headless
+} // namespace clap_trap

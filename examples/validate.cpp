@@ -9,11 +9,11 @@
  * - Plugin can be created, initialized, activated, processed, and destroyed
  */
 
-#include "clap-headless-host/clap-headless-host.h"
+#include "clap-trap/clap-trap.h"
 #include <cstdio>
 #include <cstdlib>
 
-using namespace clap_headless;
+using namespace clap_trap;
 
 static constexpr uint32_t SAMPLE_RATE = 48000;
 static constexpr uint32_t BLOCK_SIZE = 256;

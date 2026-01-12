@@ -1,11 +1,11 @@
 /**
- * clap-headless-host unit tests
+ * clap-trap unit tests
  */
 
 #include <catch2/catch_test_macros.hpp>
-#include "clap-headless-host/clap-headless-host.h"
+#include "clap-trap/clap-trap.h"
 
-using namespace clap_headless;
+using namespace clap_trap;
 
 //-----------------------------------------------------------------------------
 // TestHost tests

@@ -1,6 +1,8 @@
-# clap-headless-host
+# clap-trap
 
 A minimal headless CLAP host library for testing and validating audio plugins.
+
+*It's a trap! ...for catching CLAP plugin bugs.*
 
 ## Features
 
@@ -15,9 +17,9 @@ A minimal headless CLAP host library for testing and validating audio plugins.
 ### As a Library
 
 ```cpp
-#include "clap-headless-host/clap-headless-host.h"
+#include "clap-trap/clap-trap.h"
 
-using namespace clap_headless;
+using namespace clap_trap;
 
 // Load a plugin
 auto loader = PluginLoader::load("/path/to/plugin.clap");
@@ -86,20 +88,20 @@ cmake --build .
 
 ### Options
 
-- `CLAP_HEADLESS_BUILD_TESTS`: Build unit tests (default: ON)
-- `CLAP_HEADLESS_BUILD_EXAMPLES`: Build example tools (default: ON)
+- `CLAP_TRAP_BUILD_TESTS`: Build unit tests (default: ON)
+- `CLAP_TRAP_BUILD_EXAMPLES`: Build example tools (default: ON)
 
 ## Integration with CMake
 
 ```cmake
 FetchContent_Declare(
-    clap-headless-host
-    GIT_REPOSITORY https://github.com/WebCLAP/clap-headless-host.git
+    clap-trap
+    GIT_REPOSITORY https://github.com/WebCLAP/clap-trap.git
     GIT_TAG v0.1.0
 )
-FetchContent_MakeAvailable(clap-headless-host)
+FetchContent_MakeAvailable(clap-trap)
 
-target_link_libraries(your-target PRIVATE clap-headless-host)
+target_link_libraries(your-target PRIVATE clap-trap)
 ```
 
 ## License

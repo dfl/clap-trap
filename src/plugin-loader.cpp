@@ -1,10 +1,10 @@
 /**
- * clap-headless-host: Plugin Loader Implementation
+ * clap-trap: Plugin Loader Implementation
  *
  * Cross-platform CLAP plugin loading via dlopen/LoadLibrary
  */
 
-#include "clap-headless-host/plugin-loader.h"
+#include "clap-trap/plugin-loader.h"
 #include <cstring>
 
 #if defined(_WIN32)
@@ -18,7 +18,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
-namespace clap_headless {
+namespace clap_trap {
 
 PluginLoader::~PluginLoader() {
     if (initialized_ && entry_) {
@@ -151,4 +151,4 @@ const clap_plugin_factory_t* PluginLoader::factory() const {
         entry_->get_factory(CLAP_PLUGIN_FACTORY_ID));
 }
 
-} // namespace clap_headless
+} // namespace clap_trap

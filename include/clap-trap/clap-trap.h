@@ -1,5 +1,5 @@
 /**
- * clap-headless-host
+ * clap-trap
  *
  * A minimal headless CLAP host for testing and validation.
  *

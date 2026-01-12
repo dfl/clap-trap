@@ -55,6 +55,9 @@ target_link_libraries(clap-trap PUBLIC clap)
 if(CLAP_TRAP_WASM_SUPPORT)
     target_link_libraries(clap-trap PRIVATE wclap-bridge)
     target_compile_definitions(clap-trap PUBLIC CLAP_TRAP_HAS_WASM=1)
+    # Need to expose wclap-bridge includes since our header uses them
+    get_target_property(WCLAP_BRIDGE_INCLUDES wclap-bridge INTERFACE_INCLUDE_DIRECTORIES)
+    target_include_directories(clap-trap PUBLIC ${WCLAP_BRIDGE_INCLUDES})
 endif()
 
 # Platform-specific linking

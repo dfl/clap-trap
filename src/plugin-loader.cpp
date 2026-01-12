@@ -169,7 +169,7 @@ std::unique_ptr<PluginLoader> PluginLoader::loadWclap(const std::string& path) {
     
 const clap_plugin_factory_t* PluginLoader::factory() const {
     if (wclap_) return static_cast<const clap_plugin_factory_t*>(
-        wclap_get_factory(CLAP_PLUGIN_FACTORY_ID));
+        wclap_get_factory(wclap_, CLAP_PLUGIN_FACTORY_ID));
     if (!entry_) return nullptr;
     return static_cast<const clap_plugin_factory_t*>(
         entry_->get_factory(CLAP_PLUGIN_FACTORY_ID));

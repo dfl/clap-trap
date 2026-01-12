@@ -14,20 +14,6 @@ Supports both **native** `.clap` plugins and **WASM** `.wclap`/`.wasm` plugins (
 
 Download binaries from [Releases](https://github.com/dfl/clap-trap/releases)—**WASM plugin support is included by default**.
 
-### Building from Source
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-```
-
-WASM plugin support is enabled by default ([wclap-bridge](https://github.com/WebCLAP/wclap-bridge) is auto-fetched). For a smaller binary without WASM support:
-
-```bash
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_WASM_SUPPORT=OFF
-```
-
 ## Commands
 
 ### validate
@@ -161,7 +147,23 @@ Use clap-validator for spec compliance. Use clap-trap for "does it actually work
     clap-trap state my-plugin.clap --roundtrip
 ```
 
-## Advanced: Using as a C++ Library
+## Advanced
+
+### Building from Source
+
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+```
+
+WASM plugin support is enabled by default ([wclap-bridge](https://github.com/WebCLAP/wclap-bridge) is auto-fetched). For a smaller binary without WASM support:
+
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_WASM_SUPPORT=OFF
+```
+
+### Using as a C++ Library
 
 If you need to write custom tests, clap-trap can be used as a library:
 

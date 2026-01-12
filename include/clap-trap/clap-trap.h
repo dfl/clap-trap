@@ -12,3 +12,4 @@
 #include "plugin-loader.h"
 #include "test-host.h"
 #include "audio-buffers.h"
+#include "wav-file.h"

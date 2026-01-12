@@ -22,6 +22,7 @@ add_library(clap-trap
     src/plugin-loader.cpp
     src/test-host.cpp
     src/audio-buffers.cpp
+    src/wav-file.cpp
 )
 
 target_include_directories(clap-trap PUBLIC
@@ -38,10 +39,11 @@ elseif(UNIX)
     target_link_libraries(clap-trap PRIVATE dl)
 endif()
 
-# Examples
+# CLI tool
 if(CLAP_TRAP_BUILD_EXAMPLES)
-    add_executable(clap-trap-cli examples/cli.cpp)
-    target_link_libraries(clap-trap-cli PRIVATE clap-trap)
+    add_executable(clap-trap-bin examples/cli.cpp)
+    set_target_properties(clap-trap-bin PROPERTIES OUTPUT_NAME clap-trap)
+    target_link_libraries(clap-trap-bin PRIVATE clap-trap)
 endif()
 
 # Tests

@@ -38,7 +38,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           mkdir -p dist
-          cp build/clap-trap-cli dist/
+          cp build/clap-trap dist/
           cp build/libclap-trap.a dist/ || true
           cp -r include dist/
           cp README.md LICENSE dist/
@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp build/Release/clap-trap-cli.exe dist/
+          cp build/Release/clap-trap.exe dist/
           cp build/Release/clap-trap.lib dist/ || true
           cp -r include dist/
           cp README.md LICENSE dist/

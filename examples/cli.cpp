@@ -10,10 +10,14 @@
  */
 
 #include "clap-trap/clap-trap.h"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <vector>
 
 using namespace clap_trap;
 
@@ -31,10 +35,16 @@ static void printUsage(const char* prog) {
     fprintf(stderr, "  validate <plugin>   Basic smoke test (load, process, destroy)\n");
     fprintf(stderr, "  info <plugin>       Dump detailed plugin information\n");
     fprintf(stderr, "  bench <plugin>      Benchmark processing performance\n");
+    fprintf(stderr, "  process <plugin>    Offline audio rendering\n");
+    fprintf(stderr, "  state <plugin>      Save/load plugin state\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "  --blocks N          Number of blocks to process (default: 10 for validate, 10000 for bench)\n");
     fprintf(stderr, "  --buffer-size N     Buffer size in samples (default: 256)\n");
     fprintf(stderr, "  --sample-rate N     Sample rate in Hz (default: 48000)\n");
+    fprintf(stderr, "  -i, --input FILE    Input WAV file (process), or state file to load (state)\n");
+    fprintf(stderr, "  -o, --output FILE   Output WAV file (process), or state file to save (state)\n");
+    fprintf(stderr, "  --float             Output 32-bit float WAV (default: 16-bit PCM)\n");
+    fprintf(stderr, "  --roundtrip         Test state save/load round-trip (state command)\n");
 }
 
 struct Options {
@@ -43,6 +53,10 @@ struct Options {
     uint32_t blocks = 0;  // 0 = use default for command
     uint32_t bufferSize = DEFAULT_BLOCK_SIZE;
     uint32_t sampleRate = DEFAULT_SAMPLE_RATE;
+    const char* inputFile = nullptr;
+    const char* outputFile = nullptr;
+    bool outputFloat = false;
+    bool roundtrip = false;
 };
 
 static bool parseArgs(int argc, char* argv[], Options& opts) {
@@ -58,6 +72,14 @@ static bool parseArgs(int argc, char* argv[], Options& opts) {
             opts.bufferSize = static_cast<uint32_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "--sample-rate") == 0 && i + 1 < argc) {
             opts.sampleRate = static_cast<uint32_t>(atoi(argv[++i]));
+        } else if ((strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--input") == 0) && i + 1 < argc) {
+            opts.inputFile = argv[++i];
+        } else if ((strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) && i + 1 < argc) {
+            opts.outputFile = argv[++i];
+        } else if (strcmp(argv[i], "--float") == 0) {
+            opts.outputFloat = true;
+        } else if (strcmp(argv[i], "--roundtrip") == 0) {
+            opts.roundtrip = true;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return false;
@@ -433,6 +455,412 @@ static int cmdBench(const Options& opts) {
     return 0;
 }
 
+static int cmdProcess(const Options& opts) {
+    if (!opts.outputFile) {
+        fprintf(stderr, "ERROR: --output (-o) is required for process command\n");
+        return 1;
+    }
+
+    auto loader = PluginLoader::load(opts.pluginPath);
+    if (!loader->entry()) {
+        fprintf(stderr, "ERROR: %s\n", loader->getError().c_str());
+        return 1;
+    }
+
+    const auto* factory = loader->factory();
+    if (!factory) {
+        fprintf(stderr, "ERROR: No plugin factory\n");
+        return 1;
+    }
+
+    uint32_t count = factory->get_plugin_count(factory);
+    if (count == 0) {
+        fprintf(stderr, "ERROR: No plugins in factory\n");
+        return 1;
+    }
+
+    // Load input audio if provided
+    std::unique_ptr<WavFile> inputWav;
+    uint32_t inputChannels = 2;
+    uint32_t inputFrames = 0;
+    uint32_t sampleRate = opts.sampleRate;
+
+    if (opts.inputFile) {
+        inputWav = WavFile::load(opts.inputFile);
+        if (inputWav->hasError()) {
+            fprintf(stderr, "ERROR: %s\n", inputWav->getError().c_str());
+            return 1;
+        }
+        inputChannels = inputWav->channels();
+        inputFrames = inputWav->frameCount();
+        sampleRate = inputWav->sampleRate();
+        printf("Input: %s (%u Hz, %u ch, %u frames)\n",
+               opts.inputFile, sampleRate, inputChannels, inputFrames);
+    }
+
+    // Determine output length
+    uint32_t outputFrames;
+    if (inputWav) {
+        outputFrames = inputFrames;
+    } else {
+        // No input: generate specified number of blocks (or default to 1 second)
+        uint32_t blocks = opts.blocks > 0 ? opts.blocks : (sampleRate / opts.bufferSize);
+        outputFrames = blocks * opts.bufferSize;
+    }
+
+    TestHost host;
+
+    // Use first plugin
+    const auto* desc = factory->get_plugin_descriptor(factory, 0);
+    if (!desc) {
+        fprintf(stderr, "ERROR: Null plugin descriptor\n");
+        return 1;
+    }
+    printf("Plugin: %s\n", desc->name);
+
+    const clap_plugin_t* plugin = factory->create_plugin(factory, host.clapHost(), desc->id);
+    if (!plugin || !plugin->init(plugin)) {
+        fprintf(stderr, "ERROR: Failed to create/init plugin\n");
+        if (plugin) plugin->destroy(plugin);
+        return 1;
+    }
+
+    if (!plugin->activate(plugin, sampleRate, opts.bufferSize, opts.bufferSize)) {
+        fprintf(stderr, "ERROR: Failed to activate plugin\n");
+        plugin->destroy(plugin);
+        return 1;
+    }
+
+    if (!plugin->start_processing(plugin)) {
+        fprintf(stderr, "ERROR: Failed to start processing\n");
+        plugin->deactivate(plugin);
+        plugin->destroy(plugin);
+        return 1;
+    }
+
+    // Query audio ports to get output channel count
+    uint32_t outputChannels = 2; // default stereo
+    const auto* audioPorts = static_cast<const clap_plugin_audio_ports_t*>(
+        plugin->get_extension(plugin, CLAP_EXT_AUDIO_PORTS));
+    if (audioPorts) {
+        uint32_t outCount = audioPorts->count(plugin, false);
+        if (outCount > 0) {
+            clap_audio_port_info_t info{};
+            if (audioPorts->get(plugin, 0, false, &info)) {
+                outputChannels = info.channel_count;
+            }
+        }
+    }
+
+    // Allocate buffers
+    std::vector<float> inputBuffer(opts.bufferSize * inputChannels);
+    std::vector<float> outputBuffer(opts.bufferSize * outputChannels);
+    std::vector<float> outputSamples;
+    outputSamples.reserve(outputFrames * outputChannels);
+
+    // Set up CLAP audio buffers
+    std::vector<float*> inChannelPtrs(inputChannels);
+    std::vector<float*> outChannelPtrs(outputChannels);
+    std::vector<std::vector<float>> inChannels(inputChannels);
+    std::vector<std::vector<float>> outChannels(outputChannels);
+
+    for (uint32_t c = 0; c < inputChannels; ++c) {
+        inChannels[c].resize(opts.bufferSize);
+        inChannelPtrs[c] = inChannels[c].data();
+    }
+    for (uint32_t c = 0; c < outputChannels; ++c) {
+        outChannels[c].resize(opts.bufferSize);
+        outChannelPtrs[c] = outChannels[c].data();
+    }
+
+    clap_audio_buffer_t inBuf{};
+    inBuf.data32 = inChannelPtrs.data();
+    inBuf.channel_count = inputChannels;
+    inBuf.latency = 0;
+    inBuf.constant_mask = 0;
+
+    clap_audio_buffer_t outBuf{};
+    outBuf.data32 = outChannelPtrs.data();
+    outBuf.channel_count = outputChannels;
+    outBuf.latency = 0;
+    outBuf.constant_mask = 0;
+
+    EmptyInputEvents inEvents;
+    DiscardOutputEvents outEvents;
+
+    clap_process_t process{};
+    process.steady_time = 0;
+    process.frames_count = opts.bufferSize;
+    process.transport = nullptr;
+    process.audio_inputs = &inBuf;
+    process.audio_outputs = &outBuf;
+    process.audio_inputs_count = 1;
+    process.audio_outputs_count = 1;
+    process.in_events = inEvents.get();
+    process.out_events = outEvents.get();
+
+    // Process
+    uint32_t framesProcessed = 0;
+    uint32_t inputPos = 0;
+
+    while (framesProcessed < outputFrames) {
+        uint32_t framesToProcess = std::min(opts.bufferSize, outputFrames - framesProcessed);
+        process.frames_count = framesToProcess;
+
+        // Fill input buffers
+        if (inputWav) {
+            const auto& samples = inputWav->samples();
+            for (uint32_t f = 0; f < framesToProcess; ++f) {
+                for (uint32_t c = 0; c < inputChannels; ++c) {
+                    if (inputPos + f < inputFrames) {
+                        inChannels[c][f] = samples[(inputPos + f) * inputChannels + c];
+                    } else {
+                        inChannels[c][f] = 0.0f;
+                    }
+                }
+            }
+        } else {
+            // No input: silence
+            for (uint32_t c = 0; c < inputChannels; ++c) {
+                std::fill(inChannels[c].begin(), inChannels[c].end(), 0.0f);
+            }
+        }
+
+        // Clear output buffers
+        for (uint32_t c = 0; c < outputChannels; ++c) {
+            std::fill(outChannels[c].begin(), outChannels[c].end(), 0.0f);
+        }
+
+        plugin->process(plugin, &process);
+
+        // Collect output (interleaved)
+        for (uint32_t f = 0; f < framesToProcess; ++f) {
+            for (uint32_t c = 0; c < outputChannels; ++c) {
+                outputSamples.push_back(outChannels[c][f]);
+            }
+        }
+
+        framesProcessed += framesToProcess;
+        inputPos += framesToProcess;
+        process.steady_time += framesToProcess;
+    }
+
+    plugin->stop_processing(plugin);
+    plugin->deactivate(plugin);
+    plugin->destroy(plugin);
+
+    // Write output
+    WavFormat wavFmt = opts.outputFloat ? WavFormat::Float32 : WavFormat::Int16;
+    if (!WavFile::save(opts.outputFile, outputSamples, sampleRate, outputChannels, wavFmt)) {
+        fprintf(stderr, "ERROR: Failed to write output file\n");
+        return 1;
+    }
+
+    printf("Output: %s (%u Hz, %u ch, %u frames, %s)\n",
+           opts.outputFile, sampleRate, outputChannels,
+           static_cast<uint32_t>(outputSamples.size() / outputChannels),
+           opts.outputFloat ? "float32" : "int16");
+
+    return 0;
+}
+
+// Stream for state save/load
+struct StateStream {
+    std::vector<uint8_t> data;
+    size_t readPos = 0;
+};
+
+static int64_t stateWrite(const clap_ostream_t* stream, const void* buffer, uint64_t size) {
+    auto* s = static_cast<StateStream*>(stream->ctx);
+    const auto* bytes = static_cast<const uint8_t*>(buffer);
+    s->data.insert(s->data.end(), bytes, bytes + size);
+    return static_cast<int64_t>(size);
+}
+
+static int64_t stateRead(const clap_istream_t* stream, void* buffer, uint64_t size) {
+    auto* s = static_cast<StateStream*>(stream->ctx);
+    size_t available = s->data.size() - s->readPos;
+    size_t toRead = std::min(static_cast<size_t>(size), available);
+    if (toRead > 0) {
+        std::memcpy(buffer, s->data.data() + s->readPos, toRead);
+        s->readPos += toRead;
+    }
+    return static_cast<int64_t>(toRead);
+}
+
+static int cmdState(const Options& opts) {
+    if (!opts.outputFile && !opts.inputFile && !opts.roundtrip) {
+        fprintf(stderr, "ERROR: state command requires -o (save), -i (load), or --roundtrip\n");
+        return 1;
+    }
+
+    auto loader = PluginLoader::load(opts.pluginPath);
+    if (!loader->entry()) {
+        fprintf(stderr, "ERROR: %s\n", loader->getError().c_str());
+        return 1;
+    }
+
+    const auto* factory = loader->factory();
+    if (!factory) {
+        fprintf(stderr, "ERROR: No plugin factory\n");
+        return 1;
+    }
+
+    uint32_t count = factory->get_plugin_count(factory);
+    if (count == 0) {
+        fprintf(stderr, "ERROR: No plugins in factory\n");
+        return 1;
+    }
+
+    TestHost host;
+    const auto* desc = factory->get_plugin_descriptor(factory, 0);
+    if (!desc) {
+        fprintf(stderr, "ERROR: Null plugin descriptor\n");
+        return 1;
+    }
+    printf("Plugin: %s\n", desc->name);
+
+    const clap_plugin_t* plugin = factory->create_plugin(factory, host.clapHost(), desc->id);
+    if (!plugin || !plugin->init(plugin)) {
+        fprintf(stderr, "ERROR: Failed to create/init plugin\n");
+        if (plugin) plugin->destroy(plugin);
+        return 1;
+    }
+
+    // Check for state extension
+    const auto* state = static_cast<const clap_plugin_state_t*>(
+        plugin->get_extension(plugin, CLAP_EXT_STATE));
+    if (!state) {
+        fprintf(stderr, "ERROR: Plugin does not support state extension\n");
+        plugin->destroy(plugin);
+        return 1;
+    }
+
+    int result = 0;
+
+    if (opts.roundtrip) {
+        // Round-trip test: save state, randomize params, restore, compare
+        printf("Testing state round-trip...\n");
+
+        // Save original state
+        StateStream saveStream;
+        clap_ostream_t ostream{};
+        ostream.ctx = &saveStream;
+        ostream.write = stateWrite;
+
+        if (!state->save(plugin, &ostream)) {
+            fprintf(stderr, "  ERROR: Failed to save state\n");
+            plugin->destroy(plugin);
+            return 1;
+        }
+        printf("  Saved state: %zu bytes\n", saveStream.data.size());
+
+        // Get current parameter values
+        const auto* params = static_cast<const clap_plugin_params_t*>(
+            plugin->get_extension(plugin, CLAP_EXT_PARAMS));
+
+        std::vector<std::pair<clap_id, double>> originalValues;
+        if (params) {
+            uint32_t paramCount = params->count(plugin);
+            for (uint32_t i = 0; i < paramCount; ++i) {
+                clap_param_info_t info{};
+                if (params->get_info(plugin, i, &info)) {
+                    double value = 0;
+                    params->get_value(plugin, info.id, &value);
+                    originalValues.push_back({info.id, value});
+                }
+            }
+            printf("  Captured %zu parameter values\n", originalValues.size());
+        }
+
+        // Restore state
+        StateStream loadStream;
+        loadStream.data = saveStream.data;
+        clap_istream_t istream{};
+        istream.ctx = &loadStream;
+        istream.read = stateRead;
+
+        if (!state->load(plugin, &istream)) {
+            fprintf(stderr, "  ERROR: Failed to load state\n");
+            plugin->destroy(plugin);
+            return 1;
+        }
+        printf("  Restored state\n");
+
+        // Compare parameter values
+        if (params && !originalValues.empty()) {
+            int mismatches = 0;
+            for (const auto& [id, expected] : originalValues) {
+                double actual = 0;
+                params->get_value(plugin, id, &actual);
+                if (std::abs(actual - expected) > 1e-6) {
+                    fprintf(stderr, "  MISMATCH: param %u: expected %.6f, got %.6f\n",
+                            id, expected, actual);
+                    mismatches++;
+                }
+            }
+            if (mismatches == 0) {
+                printf("  All %zu parameters match after restore\n", originalValues.size());
+            } else {
+                fprintf(stderr, "  ERROR: %d parameter(s) did not match after restore\n", mismatches);
+                result = 1;
+            }
+        }
+    }
+    else if (opts.outputFile) {
+        // Save state to file
+        StateStream stream;
+        clap_ostream_t ostream{};
+        ostream.ctx = &stream;
+        ostream.write = stateWrite;
+
+        if (!state->save(plugin, &ostream)) {
+            fprintf(stderr, "ERROR: Failed to save state\n");
+            plugin->destroy(plugin);
+            return 1;
+        }
+
+        std::ofstream file(opts.outputFile, std::ios::binary);
+        if (!file) {
+            fprintf(stderr, "ERROR: Could not create file: %s\n", opts.outputFile);
+            plugin->destroy(plugin);
+            return 1;
+        }
+        file.write(reinterpret_cast<const char*>(stream.data.data()), stream.data.size());
+        printf("Saved state: %s (%zu bytes)\n", opts.outputFile, stream.data.size());
+    }
+    else if (opts.inputFile) {
+        // Load state from file
+        std::ifstream file(opts.inputFile, std::ios::binary | std::ios::ate);
+        if (!file) {
+            fprintf(stderr, "ERROR: Could not open file: %s\n", opts.inputFile);
+            plugin->destroy(plugin);
+            return 1;
+        }
+
+        size_t size = file.tellg();
+        file.seekg(0);
+
+        StateStream stream;
+        stream.data.resize(size);
+        file.read(reinterpret_cast<char*>(stream.data.data()), size);
+
+        clap_istream_t istream{};
+        istream.ctx = &stream;
+        istream.read = stateRead;
+
+        if (!state->load(plugin, &istream)) {
+            fprintf(stderr, "ERROR: Failed to load state\n");
+            plugin->destroy(plugin);
+            return 1;
+        }
+        printf("Loaded state: %s (%zu bytes)\n", opts.inputFile, size);
+    }
+
+    plugin->destroy(plugin);
+    return result;
+}
+
 //-----------------------------------------------------------------------------
 // Main
 //-----------------------------------------------------------------------------
@@ -451,6 +879,10 @@ int main(int argc, char* argv[]) {
         return cmdValidate(opts);
     } else if (strcmp(opts.command, "bench") == 0) {
         return cmdBench(opts);
+    } else if (strcmp(opts.command, "process") == 0) {
+        return cmdProcess(opts);
+    } else if (strcmp(opts.command, "state") == 0) {
+        return cmdState(opts);
     } else {
         fprintf(stderr, "Unknown command: %s\n\n", opts.command);
         printUsage(argv[0]);

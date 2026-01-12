@@ -4,133 +4,171 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/v/release/dfl/clap-trap)](https://github.com/dfl/clap-trap/releases)
 
-A minimal headless CLAP host for automated testing. Load plugins, process audio, check outputs—no DAW required.
-
-Also useful if you're the kind of plugin developer who writes integration tests (you should be, but we know you don't).
+A command-line tool for testing CLAP plugins. Validate, benchmark, render audio, and test state—no DAW required.
 
 *It's a trap! ...for catching CLAP plugin bugs.*
 
-## Features
+## Installation
 
-- **Cross-platform plugin loading**: Load `.clap` plugins on macOS, Windows, and Linux
-- **Minimal test host**: Implements the required `clap_host_t` interface
-- **Audio buffer helpers**: Easy setup for stereo/multi-channel processing tests
-- **Event helpers**: Utilities for creating MIDI note and parameter events
-- **Validation tool**: Command-line tool to test plugins without a DAW
-
-## Usage
-
-### As a Library
-
-```cpp
-#include "clap-trap/clap-trap.h"
-
-using namespace clap_trap;
-
-// Load a plugin
-auto loader = PluginLoader::load("/path/to/plugin.clap");
-if (!loader->entry()) {
-    std::cerr << "Error: " << loader->getError() << std::endl;
-    return;
-}
-
-// Get the factory and enumerate plugins
-const auto* factory = loader->factory();
-uint32_t count = factory->get_plugin_count(factory);
-
-// Create a plugin instance
-TestHost host;
-const auto* desc = factory->get_plugin_descriptor(factory, 0);
-const clap_plugin_t* plugin = factory->create_plugin(factory, host.clapHost(), desc->id);
-
-// Initialize and activate
-plugin->init(plugin);
-plugin->activate(plugin, 48000, 256, 256);
-plugin->start_processing(plugin);
-
-// Process audio
-StereoAudioBuffers buffers(256);
-buffers.fillInputWithSine(440.0f, 48000.0f);
-
-EmptyInputEvents inEvents;
-DiscardOutputEvents outEvents;
-
-clap_process_t process{};
-process.frames_count = 256;
-process.audio_inputs = buffers.inputBuffer();
-process.audio_outputs = buffers.outputBuffer();
-process.audio_inputs_count = 1;
-process.audio_outputs_count = 1;
-process.in_events = inEvents.get();
-process.out_events = outEvents.get();
-
-plugin->process(plugin, &process);
-
-// Cleanup
-plugin->stop_processing(plugin);
-plugin->deactivate(plugin);
-plugin->destroy(plugin);
-```
-
-### Command-Line Tool
-
-```bash
-# Basic smoke test
-clap-trap-cli validate /path/to/plugin.clap
-
-# Detailed plugin information
-clap-trap-cli info /path/to/plugin.clap
-
-# Benchmark performance
-clap-trap-cli bench /path/to/plugin.clap --blocks 10000
-```
-
-**Commands:**
-- `validate` - Load, process 10 blocks, destroy. Checks for crashes and NaN/Inf output.
-- `info` - Dump plugin details: parameters, audio ports, note ports, extensions.
-- `bench` - Measure realtime performance (e.g., "3500x realtime, 1.5 µs/block").
-
-**Options:**
-- `--blocks N` - Number of blocks to process
-- `--buffer-size N` - Buffer size in samples (default: 256)
-- `--sample-rate N` - Sample rate in Hz (default: 48000)
-
-## Building
+Download binaries from [Releases](https://github.com/dfl/clap-trap/releases), or build from source:
 
 ```bash
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
-### Options
+## Commands
 
-- `CLAP_TRAP_BUILD_TESTS`: Build unit tests (default: ON)
-- `CLAP_TRAP_BUILD_EXAMPLES`: Build example tools (default: ON)
+### validate
 
-## Integration with CMake
+Basic smoke test: load plugin, process audio, check for crashes and bad output.
+
+```bash
+clap-trap validate plugin.clap
+```
+
+```
+✓ Plugin loaded
+✓ Got plugin factory
+✓ Found 1 plugin(s)
+
+── My Plugin ──
+  ✓ create_plugin()
+  ✓ init()
+  ✓ activate(48000 Hz, 256 samples)
+  ✓ start_processing()
+  ✓ process() x10 blocks
+  ✓ stop_processing()
+  ✓ deactivate()
+  ✓ destroy()
+
+All 1 plugin(s) validated successfully.
+```
+
+### info
+
+Dump plugin details: parameters, audio ports, note ports, supported extensions.
+
+```bash
+clap-trap info plugin.clap
+```
+
+### bench
+
+Measure processing performance.
+
+```bash
+clap-trap bench plugin.clap --blocks 10000
+```
+
+```
+My Plugin                                  3584.2x realtime    7.3 µs/block  (10000 blocks)
+```
+
+### process
+
+Offline audio rendering. Process a WAV file through a plugin, or render a synth to WAV.
+
+```bash
+# Process audio through an effect
+clap-trap process effect.clap -i input.wav -o output.wav
+
+# Render a synth (silence in, capture output)
+clap-trap process synth.clap -o output.wav --blocks 1000
+
+# Output as 32-bit float
+clap-trap process plugin.clap -i input.wav -o output.wav --float
+```
+
+### state
+
+Save/load plugin state, or test state round-trip.
+
+```bash
+# Save state to file
+clap-trap state plugin.clap -o preset.state
+
+# Load state from file
+clap-trap state plugin.clap -i preset.state
+
+# Test round-trip: save, restore, verify all parameters match
+clap-trap state plugin.clap --roundtrip
+```
+
+```
+Plugin: My Plugin
+Testing state round-trip...
+  Saved state: 1350 bytes
+  Captured 31 parameter values
+  Restored state
+  All 31 parameters match after restore
+```
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--blocks N` | Number of blocks to process |
+| `--buffer-size N` | Buffer size in samples (default: 256) |
+| `--sample-rate N` | Sample rate in Hz (default: 48000) |
+| `-i, --input FILE` | Input WAV file (process) or state file (state) |
+| `-o, --output FILE` | Output WAV file (process) or state file (state) |
+| `--float` | Output 32-bit float WAV (default: 16-bit PCM) |
+| `--roundtrip` | Test state save/load round-trip |
+
+## How is this different from clap-validator?
+
+[clap-validator](https://github.com/free-audio/clap-validator) checks CLAP spec compliance. It's great. Use it.
+
+**clap-trap** is for integration testing:
+- Smoke test plugins in CI before release
+- Benchmark performance
+- Render audio offline for comparison tests
+- Verify state save/load works correctly
+
+Use clap-validator for spec compliance. Use clap-trap for "does it actually work?"
+
+## Advanced: Using as a C++ Library
+
+If you need to write custom tests, clap-trap can be used as a library:
 
 ```cmake
 FetchContent_Declare(
     clap-trap
     GIT_REPOSITORY https://github.com/dfl/clap-trap.git
-    GIT_TAG v0.1.0
+    GIT_TAG main
 )
 FetchContent_MakeAvailable(clap-trap)
 
 target_link_libraries(your-target PRIVATE clap-trap)
 ```
 
-## How is this different from clap-validator?
+```cpp
+#include "clap-trap/clap-trap.h"
 
-[clap-validator](https://github.com/free-audio/clap-validator) is a Rust CLI that checks CLAP spec compliance. It's great. Use it.
+using namespace clap_trap;
 
-**clap-trap** is a C++ headless host for writing your own tests:
-- **Plugin developers**: Test your plugin without spinning up a DAW
-- **Bridge developers**: Verify your bridge works (e.g., [wclap-bridge](https://github.com/WebCLAP/wclap-bridge))
-- **CI pipelines**: Automated smoke tests before release
+auto loader = PluginLoader::load("/path/to/plugin.clap");
+const auto* factory = loader->factory();
 
-Use clap-validator for spec compliance. Use clap-trap for integration testing.
+TestHost host;
+const auto* desc = factory->get_plugin_descriptor(factory, 0);
+const clap_plugin_t* plugin = factory->create_plugin(factory, host.clapHost(), desc->id);
+
+plugin->init(plugin);
+plugin->activate(plugin, 48000, 256, 256);
+plugin->start_processing(plugin);
+
+StereoAudioBuffers buffers(256);
+buffers.fillInputWithSine(440.0f, 48000.0f);
+
+// ... process audio ...
+
+plugin->stop_processing(plugin);
+plugin->deactivate(plugin);
+plugin->destroy(plugin);
+```
 
 ## License
 

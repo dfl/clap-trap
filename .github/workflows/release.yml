@@ -23,13 +23,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout wclap-bridge
+        uses: actions/checkout@v4
+        with:
+          repository: AuburGraphs/wclap-bridge
+          path: wclap-bridge
+          submodules: recursive
+
+      - name: Cache CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_deps
+            wclap-bridge/build/_deps
+          key: cmake-deps-${{ matrix.os }}-${{ hashFiles('CMakeLists.txt', 'wclap-bridge/CMakeLists.txt') }}
+          restore-keys: |
+            cmake-deps-${{ matrix.os }}-
+
+      - name: Cache Wasmtime SDK
+        uses: actions/cache@v4
+        with:
+          path: wclap-bridge/wasmtime
+          key: wasmtime-${{ matrix.os }}-${{ hashFiles('wclap-bridge/wasmtime-fetched.cmake') }}
+          restore-keys: |
+            wasmtime-${{ matrix.os }}-
+
       - name: Configure CMake (macOS universal)
         if: matrix.os == 'macos-latest'
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCLAP_TRAP_BUILD_TESTS=OFF
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCLAP_TRAP_BUILD_TESTS=OFF -DCLAP_TRAP_WASM_SUPPORT=ON
 
       - name: Configure CMake (other)
         if: matrix.os != 'macos-latest'
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_BUILD_TESTS=OFF
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_BUILD_TESTS=OFF -DCLAP_TRAP_WASM_SUPPORT=ON
 
       - name: Build
         run: cmake --build build --config Release

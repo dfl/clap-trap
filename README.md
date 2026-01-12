@@ -6,6 +6,8 @@
 
 A command-line tool for testing CLAP plugins. Validate, benchmark, render audio, and test state—no DAW required.
 
+Supports both **native** `.clap` plugins and **WASM** `.wclap`/`.wasm` plugins (via [wclap-bridge](https://github.com/AuburGraphs/wclap-bridge)).
+
 *It's a trap! ...for catching CLAP plugin bugs.*
 
 ## Installation
@@ -18,6 +20,22 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
+### With WASM Support
+
+To enable WASM plugin support, you'll need [wclap-bridge](https://github.com/AuburGraphs/wclap-bridge):
+
+```bash
+# Clone wclap-bridge as a sibling directory
+git clone --recursive https://github.com/AuburGraphs/wclap-bridge.git ../wclap-bridge
+
+# Build with WASM support
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_WASM_SUPPORT=ON
+cmake --build .
+```
+
+This produces a larger binary (includes Wasmtime runtime). For a smaller binary without WASM support, omit `-DCLAP_TRAP_WASM_SUPPORT=ON`.
+
 ## Commands
 
 ### validate
@@ -25,7 +43,14 @@ cmake --build .
 Basic smoke test: load plugin, process audio, check for crashes and bad output.
 
 ```bash
+# Native plugin
 clap-trap validate plugin.clap
+
+# WASM plugin bundle
+clap-trap validate plugin.wclap
+
+# Raw WASM file
+clap-trap validate plugin.wasm
 ```
 
 ```

@@ -7,6 +7,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 option(CLAP_TRAP_BUILD_TESTS "Build tests" ON)
 option(CLAP_TRAP_BUILD_EXAMPLES "Build examples" ON)
+option(CLAP_TRAP_WASM_SUPPORT "Enable WASM plugin support via wclap-bridge" OFF)
+
+# Optional: wclap-bridge for WASM plugin support
+if(CLAP_TRAP_WASM_SUPPORT)
+    find_package(wclap-bridge QUIET)
+    if(NOT wclap-bridge_FOUND)
+        # Try to find it as a subdirectory (CI uses ./wclap-bridge, local dev uses ../wclap-bridge)
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/wclap-bridge/CMakeLists.txt")
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/wclap-bridge" "${CMAKE_BINARY_DIR}/wclap-bridge")
+            set(wclap-bridge_FOUND TRUE)
+        elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../wclap-bridge/CMakeLists.txt")
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../wclap-bridge" "${CMAKE_BINARY_DIR}/wclap-bridge")
+            set(wclap-bridge_FOUND TRUE)
+        else()
+            message(FATAL_ERROR "CLAP_TRAP_WASM_SUPPORT is ON but wclap-bridge not found. "
+                "Either install wclap-bridge, or place it at ./wclap-bridge/ or ../wclap-bridge/")
+        endif()
+    endif()
+endif()
 
 # Fetch CLAP headers
 include(FetchContent)
@@ -31,6 +50,12 @@ target_include_directories(clap-trap PUBLIC
 )
 
 target_link_libraries(clap-trap PUBLIC clap)
+
+# Optional WASM support via wclap-bridge
+if(CLAP_TRAP_WASM_SUPPORT)
+    target_link_libraries(clap-trap PRIVATE wclap-bridge)
+    target_compile_definitions(clap-trap PUBLIC CLAP_TRAP_HAS_WASM=1)
+endif()
 
 # Platform-specific linking
 if(APPLE)

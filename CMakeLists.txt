@@ -7,13 +7,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 option(CLAP_TRAP_BUILD_TESTS "Build tests" ON)
 option(CLAP_TRAP_BUILD_EXAMPLES "Build examples" ON)
-option(CLAP_TRAP_WASM_SUPPORT "Enable WASM plugin support via wclap-bridge" OFF)
+option(CLAP_TRAP_WASM_SUPPORT "Enable WASM plugin support via wclap-bridge" ON)
 
 # Optional: wclap-bridge for WASM plugin support
 if(CLAP_TRAP_WASM_SUPPORT)
     find_package(wclap-bridge QUIET)
     if(NOT wclap-bridge_FOUND)
-        # Try to find it as a subdirectory (CI uses ./wclap-bridge, local dev uses ../wclap-bridge)
+        # Try local directories first (CI uses ./wclap-bridge, local dev may use ../wclap-bridge)
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/wclap-bridge/CMakeLists.txt")
             add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/wclap-bridge" "${CMAKE_BINARY_DIR}/wclap-bridge")
             set(wclap-bridge_FOUND TRUE)
@@ -21,8 +21,17 @@ if(CLAP_TRAP_WASM_SUPPORT)
             add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../wclap-bridge" "${CMAKE_BINARY_DIR}/wclap-bridge")
             set(wclap-bridge_FOUND TRUE)
         else()
-            message(FATAL_ERROR "CLAP_TRAP_WASM_SUPPORT is ON but wclap-bridge not found. "
-                "Either install wclap-bridge, or place it at ./wclap-bridge/ or ../wclap-bridge/")
+            # Auto-fetch wclap-bridge if not found locally
+            message(STATUS "Fetching wclap-bridge...")
+            FetchContent_Declare(
+                wclap-bridge
+                GIT_REPOSITORY https://github.com/WebCLAP/wclap-bridge.git
+                GIT_TAG main
+                GIT_SHALLOW TRUE
+                GIT_SUBMODULES_RECURSE TRUE
+            )
+            FetchContent_MakeAvailable(wclap-bridge)
+            set(wclap-bridge_FOUND TRUE)
         endif()
     endif()
 endif()

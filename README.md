@@ -6,7 +6,7 @@
 
 A command-line tool for testing CLAP plugins. Validate, benchmark, render audio, and test state—no DAW required.
 
-Supports both **native** `.clap` plugins and **WASM** `.wclap`/`.wasm` plugins (via [wclap-bridge](https://github.com/AuburGraphs/wclap-bridge)).
+Supports both **native** `.clap` plugins and **WASM** `.wclap`/`.wasm` plugins (via [wclap-bridge](https://github.com/WebCLAP/wclap-bridge)).
 
 *It's a trap! ...for catching CLAP plugin bugs.*
 
@@ -22,11 +22,11 @@ cmake --build .
 
 ### With WASM Support
 
-To enable WASM plugin support, you'll need [wclap-bridge](https://github.com/AuburGraphs/wclap-bridge):
+To enable WASM plugin support, you'll need [wclap-bridge](https://github.com/WebCLAP/wclap-bridge):
 
 ```bash
 # Clone wclap-bridge as a sibling directory
-git clone --recursive https://github.com/AuburGraphs/wclap-bridge.git ../wclap-bridge
+git clone --recursive https://github.com/WebCLAP/wclap-bridge.git ../wclap-bridge
 
 # Build with WASM support
 mkdir build && cd build

@@ -26,7 +26,7 @@ jobs:
       - name: Checkout wclap-bridge
         uses: actions/checkout@v4
         with:
-          repository: AuburGraphs/wclap-bridge
+          repository: WebCLAP/wclap-bridge
           path: wclap-bridge
           submodules: recursive
 

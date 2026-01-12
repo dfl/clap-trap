@@ -12,7 +12,9 @@ Supports both **native** `.clap` plugins and **WASM** `.wclap`/`.wasm` plugins (
 
 ## Installation
 
-Download binaries from [Releases](https://github.com/dfl/clap-trap/releases), or build from source:
+Download binaries from [Releases](https://github.com/dfl/clap-trap/releases)—**WASM plugin support is included by default**.
+
+### Building from Source
 
 ```bash
 mkdir build && cd build
@@ -20,9 +22,11 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
-### With WASM Support
+This builds clap-trap for native `.clap` plugins only.
 
-To enable WASM plugin support, you'll need [wclap-bridge](https://github.com/WebCLAP/wclap-bridge):
+#### With WASM Support
+
+To also support `.wclap`/`.wasm` plugins, you'll need [wclap-bridge](https://github.com/WebCLAP/wclap-bridge):
 
 ```bash
 # Clone wclap-bridge as a sibling directory
@@ -34,7 +38,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCLAP_TRAP_WASM_SUPPORT=ON
 cmake --build .
 ```
 
-This produces a larger binary (includes Wasmtime runtime). For a smaller binary without WASM support, omit `-DCLAP_TRAP_WASM_SUPPORT=ON`.
+This produces a larger binary (includes Wasmtime runtime).
 
 ## Commands
 

@@ -25,6 +25,12 @@ jobs:
           path: wclap-bridge
           submodules: recursive
 
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
       - name: Cache CMake dependencies
         uses: actions/cache@v4
         with:

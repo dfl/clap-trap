@@ -151,8 +151,23 @@ Testing state round-trip...
 - Benchmark performance
 - Render audio offline for comparison tests
 - Verify state save/load works correctly
+- **WASM plugin support** (.wclap and .wasm files)
 
 Use clap-validator for spec compliance. Use clap-trap for "does it actually work?"
+
+### Using both in CI
+
+```yaml
+# In your plugin's CI workflow
+- name: Spec compliance
+  run: clap-validator validate my-plugin.clap
+
+- name: Integration tests
+  run: |
+    clap-trap validate my-plugin.clap
+    clap-trap bench my-plugin.clap --blocks 10000
+    clap-trap state my-plugin.clap --roundtrip
+```
 
 ## Advanced: Using as a C++ Library
 

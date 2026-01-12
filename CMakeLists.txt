@@ -96,7 +96,6 @@ endif()
 include(GNUInstallDirs)
 
 install(TARGETS clap-trap
-    EXPORT clap-trap-targets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -106,8 +105,13 @@ install(DIRECTORY include/clap-trap
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(EXPORT clap-trap-targets
-    FILE clap-trap-config.cmake
-    NAMESPACE clap-trap::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap-trap
-)
+# Only export when not using WASM support (wclap-bridge isn't in an export set)
+if(NOT CLAP_TRAP_WASM_SUPPORT)
+    install(TARGETS clap-trap EXPORT clap-trap-targets)
+    install(EXPORT clap-trap-targets
+        FILE clap-trap-config.cmake
+        NAMESPACE clap-trap::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap-trap
+    )
+endif()
+

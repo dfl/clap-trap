@@ -108,6 +108,37 @@ Testing state round-trip...
   All 31 parameters match after restore
 ```
 
+### notes
+
+Test note/MIDI processing. Feed a MIDI file through a plugin and compare input/output events.
+
+```bash
+# Basic usage
+clap-trap notes plugin.clap -i song.mid
+
+# With output MIDI file
+clap-trap notes plugin.clap -i song.mid -o processed.mid
+
+# Verbose mode (show all events)
+clap-trap notes plugin.clap -i song.mid -v
+
+# Set plugin parameters
+clap-trap notes plugin.clap -i song.mid --param 0=1 --param 2=1
+```
+
+```
+MIDI file: song.mid
+  Format: 1, Tempo: 120.0 BPM, Duration: 180.50s
+  Note events: 2048
+
+Plugin: My Plugin
+
+Summary:
+  Input:  1024 note-on, 1024 note-off
+  Output: 1024 note-on, 1020 note-off, 0 expressions
+  Note events processed: 1024
+```
+
 ## Options
 
 | Option | Description |
@@ -115,10 +146,12 @@ Testing state round-trip...
 | `--blocks N` | Number of blocks to process |
 | `--buffer-size N` | Buffer size in samples (default: 256) |
 | `--sample-rate N` | Sample rate in Hz (default: 48000) |
-| `-i, --input FILE` | Input WAV file (process) or state file (state) |
-| `-o, --output FILE` | Output WAV file (process) or state file (state) |
+| `-i, --input FILE` | Input WAV/MIDI file (process/notes) or state file (state) |
+| `-o, --output FILE` | Output WAV/MIDI file (process/notes) or state file (state) |
 | `--float` | Output 32-bit float WAV (default: 16-bit PCM) |
 | `--roundtrip` | Test state save/load round-trip |
+| `--verbose, -v` | Show detailed event output (notes command) |
+| `--param ID=VALUE` | Set plugin parameter before processing (can repeat) |
 
 ## How is this different from clap-validator?
 

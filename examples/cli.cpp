@@ -47,7 +47,13 @@ static void printUsage(const char* prog) {
     fprintf(stderr, "  --float             Output 32-bit float WAV (default: 16-bit PCM)\n");
     fprintf(stderr, "  --roundtrip         Test state save/load round-trip (state command)\n");
     fprintf(stderr, "  --verbose           Show detailed event output (notes command)\n");
+    fprintf(stderr, "  --param ID=VALUE    Set parameter before processing (can repeat)\n");
 }
+
+struct ParamSetting {
+    uint32_t id;
+    double value;
+};
 
 struct Options {
     const char* command = nullptr;
@@ -60,6 +66,7 @@ struct Options {
     bool outputFloat = false;
     bool roundtrip = false;
     bool verbose = false;
+    std::vector<ParamSetting> params;  // Parameter settings (--param id=value)
 };
 
 static bool parseArgs(int argc, char* argv[], Options& opts) {
@@ -85,6 +92,18 @@ static bool parseArgs(int argc, char* argv[], Options& opts) {
             opts.roundtrip = true;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             opts.verbose = true;
+        } else if (strcmp(argv[i], "--param") == 0 && i + 1 < argc) {
+            // Parse id=value
+            const char* arg = argv[++i];
+            const char* eq = strchr(arg, '=');
+            if (!eq) {
+                fprintf(stderr, "Invalid --param format (expected ID=VALUE): %s\n", arg);
+                return false;
+            }
+            ParamSetting p;
+            p.id = static_cast<uint32_t>(atoi(arg));
+            p.value = atof(eq + 1);
+            opts.params.push_back(p);
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return false;
@@ -992,6 +1011,9 @@ static int cmdNotes(const Options& opts) {
     uint64_t currentSample = 0;
     size_t nextEventIdx = 0;
 
+    // Apply parameter settings in first buffer
+    bool paramsApplied = false;
+
     if (opts.verbose) {
         printf("%-8s %-8s %-6s %-5s %-8s %s\n",
                "Time", "Type", "Note", "Ch", "Velocity", "Details");
@@ -1003,6 +1025,14 @@ static int cmdNotes(const Options& opts) {
 
         // Add events for this buffer
         inEvents.clear();
+
+        // Apply parameter settings at start of first buffer
+        if (!paramsApplied && !opts.params.empty()) {
+            for (const auto& p : opts.params) {
+                inEvents.addParamValue(0, p.id, p.value);
+            }
+            paramsApplied = true;
+        }
         while (nextEventIdx < noteEvents.size()) {
             const auto& event = noteEvents[nextEventIdx];
             uint64_t eventSample = static_cast<uint64_t>(event.secondTime * sampleRate);

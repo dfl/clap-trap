@@ -83,6 +83,63 @@ private:
 };
 
 /**
+ * Captured event - stores event type and relevant data.
+ */
+struct CapturedEvent {
+    uint32_t time;
+    uint16_t type;
+
+    // Note event data
+    int16_t port;
+    int16_t channel;
+    int16_t key;
+    int32_t noteId;
+    double velocity;
+
+    // Note expression data
+    clap_note_expression expressionId;
+    double expressionValue;
+
+    // Parameter data
+    clap_id paramId;
+    double paramValue;
+
+    // Utility methods
+    bool isNoteOn() const { return type == CLAP_EVENT_NOTE_ON; }
+    bool isNoteOff() const { return type == CLAP_EVENT_NOTE_OFF; }
+    bool isNoteExpression() const { return type == CLAP_EVENT_NOTE_EXPRESSION; }
+    bool isParamValue() const { return type == CLAP_EVENT_PARAM_VALUE; }
+};
+
+/**
+ * Capturing output events - stores all events for inspection.
+ */
+class CaptureOutputEvents {
+public:
+    CaptureOutputEvents();
+
+    const clap_output_events_t* get() const { return &events_; }
+
+    /// Get all captured events
+    const std::vector<CapturedEvent>& events() const { return captured_; }
+
+    /// Clear captured events
+    void clear() { captured_.clear(); }
+
+    /// Get count of specific event types
+    size_t countNoteOn() const;
+    size_t countNoteOff() const;
+    size_t countNoteExpression() const;
+    size_t countParamValue() const;
+
+private:
+    clap_output_events_t events_;
+    std::vector<CapturedEvent> captured_;
+
+    static bool tryPush(const clap_output_events_t* list, const clap_event_header_t* event);
+};
+
+/**
  * Simple input events list that holds a vector of events.
  */
 class SimpleInputEvents {
@@ -108,7 +165,7 @@ public:
 private:
     clap_input_events_t events_;
     std::vector<uint8_t> eventData_;
-    std::vector<const clap_event_header_t*> eventPtrs_;
+    std::vector<size_t> eventOffsets_;  // Store offsets instead of pointers (buffer can reallocate!)
 
     static uint32_t size(const clap_input_events_t* list);
     static const clap_event_header_t* getEvent(const clap_input_events_t* list, uint32_t index);

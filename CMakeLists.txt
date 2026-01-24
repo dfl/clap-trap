@@ -51,6 +51,7 @@ add_library(clap-trap
     src/test-host.cpp
     src/audio-buffers.cpp
     src/wav-file.cpp
+    src/midi-file.cpp
 )
 
 target_include_directories(clap-trap PUBLIC

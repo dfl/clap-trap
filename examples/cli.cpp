@@ -37,14 +37,16 @@ static void printUsage(const char* prog) {
     fprintf(stderr, "  bench <plugin>      Benchmark processing performance\n");
     fprintf(stderr, "  process <plugin>    Offline audio rendering\n");
     fprintf(stderr, "  state <plugin>      Save/load plugin state\n");
+    fprintf(stderr, "  notes <plugin>      Test note/MIDI processing\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "  --blocks N          Number of blocks to process (default: 10 for validate, 10000 for bench)\n");
     fprintf(stderr, "  --buffer-size N     Buffer size in samples (default: 256)\n");
     fprintf(stderr, "  --sample-rate N     Sample rate in Hz (default: 48000)\n");
-    fprintf(stderr, "  -i, --input FILE    Input WAV file (process), or state file to load (state)\n");
+    fprintf(stderr, "  -i, --input FILE    Input WAV/MIDI file (process/notes), or state file (state)\n");
     fprintf(stderr, "  -o, --output FILE   Output WAV file (process), or state file to save (state)\n");
     fprintf(stderr, "  --float             Output 32-bit float WAV (default: 16-bit PCM)\n");
     fprintf(stderr, "  --roundtrip         Test state save/load round-trip (state command)\n");
+    fprintf(stderr, "  --verbose           Show detailed event output (notes command)\n");
 }
 
 struct Options {
@@ -57,6 +59,7 @@ struct Options {
     const char* outputFile = nullptr;
     bool outputFloat = false;
     bool roundtrip = false;
+    bool verbose = false;
 };
 
 static bool parseArgs(int argc, char* argv[], Options& opts) {
@@ -80,6 +83,8 @@ static bool parseArgs(int argc, char* argv[], Options& opts) {
             opts.outputFloat = true;
         } else if (strcmp(argv[i], "--roundtrip") == 0) {
             opts.roundtrip = true;
+        } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
+            opts.verbose = true;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return false;
@@ -862,6 +867,296 @@ static int cmdState(const Options& opts) {
 }
 
 //-----------------------------------------------------------------------------
+// Notes command - test MIDI/note processing
+//-----------------------------------------------------------------------------
+
+static const char* noteName(int key) {
+    static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    static char buf[8];
+    int octave = (key / 12) - 1;
+    snprintf(buf, sizeof(buf), "%s%d", names[key % 12], octave);
+    return buf;
+}
+
+static const char* expressionName(clap_note_expression expr) {
+    switch (expr) {
+        case CLAP_NOTE_EXPRESSION_VOLUME: return "volume";
+        case CLAP_NOTE_EXPRESSION_PAN: return "pan";
+        case CLAP_NOTE_EXPRESSION_TUNING: return "tuning";
+        case CLAP_NOTE_EXPRESSION_VIBRATO: return "vibrato";
+        case CLAP_NOTE_EXPRESSION_EXPRESSION: return "expression";
+        case CLAP_NOTE_EXPRESSION_BRIGHTNESS: return "brightness";
+        case CLAP_NOTE_EXPRESSION_PRESSURE: return "pressure";
+        default: return "unknown";
+    }
+}
+
+static int cmdNotes(const Options& opts) {
+    if (!opts.inputFile) {
+        fprintf(stderr, "ERROR: --input (-i) MIDI file is required for notes command\n");
+        return 1;
+    }
+
+    // Load MIDI file
+    auto midi = MidiFile::load(opts.inputFile);
+    if (midi->hasError()) {
+        fprintf(stderr, "ERROR: %s\n", midi->getError().c_str());
+        return 1;
+    }
+
+    auto noteEvents = midi->noteEvents();
+    if (noteEvents.empty()) {
+        fprintf(stderr, "ERROR: No note events in MIDI file\n");
+        return 1;
+    }
+
+    printf("MIDI file: %s\n", opts.inputFile);
+    printf("  Format: %u, Tempo: %.1f BPM, Duration: %.2fs\n",
+           midi->format(), midi->tempo(), midi->durationSeconds());
+    printf("  Note events: %zu\n\n", noteEvents.size());
+
+    // Load plugin
+    auto loader = PluginLoader::load(opts.pluginPath);
+    if (!loader->entry()) {
+        fprintf(stderr, "ERROR: %s\n", loader->getError().c_str());
+        return 1;
+    }
+
+    const auto* factory = loader->factory();
+    if (!factory) {
+        fprintf(stderr, "ERROR: No plugin factory\n");
+        return 1;
+    }
+
+    TestHost host;
+    const auto* desc = factory->get_plugin_descriptor(factory, 0);
+    if (!desc) {
+        fprintf(stderr, "ERROR: No plugin descriptor\n");
+        return 1;
+    }
+    printf("Plugin: %s\n\n", desc->name);
+
+    const clap_plugin_t* plugin = factory->create_plugin(factory, host.clapHost(), desc->id);
+    if (!plugin || !plugin->init(plugin)) {
+        fprintf(stderr, "ERROR: Failed to create/init plugin\n");
+        if (plugin) plugin->destroy(plugin);
+        return 1;
+    }
+
+    uint32_t sampleRate = opts.sampleRate;
+    if (!plugin->activate(plugin, sampleRate, opts.bufferSize, opts.bufferSize)) {
+        fprintf(stderr, "ERROR: Failed to activate plugin\n");
+        plugin->destroy(plugin);
+        return 1;
+    }
+
+    if (!plugin->start_processing(plugin)) {
+        fprintf(stderr, "ERROR: Failed to start processing\n");
+        plugin->deactivate(plugin);
+        plugin->destroy(plugin);
+        return 1;
+    }
+
+    // Process MIDI through plugin
+    StereoAudioBuffers buffers(opts.bufferSize);
+    SimpleInputEvents inEvents;
+    CaptureOutputEvents outEvents;
+
+    clap_process_t process{};
+    process.steady_time = 0;
+    process.frames_count = opts.bufferSize;
+    process.transport = nullptr;
+    process.audio_inputs = buffers.inputBuffer();
+    process.audio_outputs = buffers.outputBuffer();
+    process.audio_inputs_count = 1;
+    process.audio_outputs_count = 1;
+    process.in_events = inEvents.get();
+    process.out_events = outEvents.get();
+
+    // Statistics
+    size_t inputNoteOns = 0;
+    size_t inputNoteOffs = 0;
+    size_t outputNoteOns = 0;
+    size_t outputNoteOffs = 0;
+    size_t outputExpressions = 0;
+
+    double totalVelocityDiff = 0.0;
+    size_t velocityCount = 0;
+
+    // Collect output events for MIDI file
+    std::vector<MidiEvent> outputMidiEvents;
+
+    // Process in time order
+    double totalDuration = midi->durationSeconds() + 1.0;  // Add 1s for note-offs
+    uint64_t totalSamples = static_cast<uint64_t>(totalDuration * sampleRate);
+    uint64_t currentSample = 0;
+    size_t nextEventIdx = 0;
+
+    if (opts.verbose) {
+        printf("%-8s %-8s %-6s %-5s %-8s %s\n",
+               "Time", "Type", "Note", "Ch", "Velocity", "Details");
+        printf("──────────────────────────────────────────────────────────\n");
+    }
+
+    while (currentSample < totalSamples) {
+        uint64_t bufferEnd = currentSample + opts.bufferSize;
+
+        // Add events for this buffer
+        inEvents.clear();
+        while (nextEventIdx < noteEvents.size()) {
+            const auto& event = noteEvents[nextEventIdx];
+            uint64_t eventSample = static_cast<uint64_t>(event.secondTime * sampleRate);
+
+            if (eventSample >= bufferEnd) break;
+
+            uint32_t offset = 0;
+            if (eventSample > currentSample) {
+                offset = static_cast<uint32_t>(eventSample - currentSample);
+            }
+
+            if (event.isNoteOn()) {
+                inEvents.addNoteOn(offset, 0, event.channel, event.data1,
+                                   -1, event.data2 / 127.0);
+                inputNoteOns++;
+
+                if (opts.verbose) {
+                    printf("%-8.3f %-8s %-6s %-5d %-8.2f (input)\n",
+                           event.secondTime, "note-on", noteName(event.data1),
+                           event.channel, event.data2 / 127.0);
+                }
+            } else if (event.isNoteOff()) {
+                inEvents.addNoteOff(offset, 0, event.channel, event.data1,
+                                    -1, event.data2 / 127.0);
+                inputNoteOffs++;
+
+                if (opts.verbose) {
+                    printf("%-8.3f %-8s %-6s %-5d %-8s (input)\n",
+                           event.secondTime, "note-off", noteName(event.data1),
+                           event.channel, "");
+                }
+            }
+
+            nextEventIdx++;
+        }
+
+        // Process
+        outEvents.clear();
+        plugin->process(plugin, &process);
+
+        // Collect output events
+        for (const auto& event : outEvents.events()) {
+            double eventTime = (currentSample + event.time) / static_cast<double>(sampleRate);
+
+            if (event.isNoteOn()) {
+                outputNoteOns++;
+
+                if (opts.verbose) {
+                    printf("%-8.3f %-8s %-6s %-5d %-8.2f (output)\n",
+                           eventTime, "note-on", noteName(event.key),
+                           event.channel, event.velocity);
+                }
+
+                // Track velocity changes
+                totalVelocityDiff += event.velocity;
+                velocityCount++;
+
+                // Store for MIDI output
+                MidiEvent midiEvent{};
+                midiEvent.secondTime = eventTime;
+                midiEvent.type = MidiEvent::NoteOn;
+                midiEvent.channel = static_cast<uint8_t>(event.channel);
+                midiEvent.data1 = static_cast<uint8_t>(event.key);
+                midiEvent.data2 = static_cast<uint8_t>(std::clamp(event.velocity * 127.0, 0.0, 127.0));
+                outputMidiEvents.push_back(midiEvent);
+            } else if (event.isNoteOff()) {
+                outputNoteOffs++;
+
+                if (opts.verbose) {
+                    printf("%-8.3f %-8s %-6s %-5d %-8s (output)\n",
+                           eventTime, "note-off", noteName(event.key),
+                           event.channel, "");
+                }
+
+                // Store for MIDI output
+                MidiEvent midiEvent{};
+                midiEvent.secondTime = eventTime;
+                midiEvent.type = MidiEvent::NoteOff;
+                midiEvent.channel = static_cast<uint8_t>(event.channel);
+                midiEvent.data1 = static_cast<uint8_t>(event.key);
+                midiEvent.data2 = 64;  // Default release velocity
+                outputMidiEvents.push_back(midiEvent);
+            } else if (event.isNoteExpression()) {
+                outputExpressions++;
+
+                if (opts.verbose) {
+                    printf("%-8.3f %-8s %-6s %-5d %-8.2f %s\n",
+                           eventTime, "expr", noteName(event.key),
+                           event.channel, event.expressionValue,
+                           expressionName(event.expressionId));
+                }
+
+                // Convert tuning expression to pitch bend
+                if (event.expressionId == CLAP_NOTE_EXPRESSION_TUNING) {
+                    MidiEvent midiEvent{};
+                    midiEvent.secondTime = eventTime;
+                    midiEvent.type = MidiEvent::PitchBend;
+                    midiEvent.channel = static_cast<uint8_t>(event.channel);
+                    // Tuning is in semitones, pitch bend range is typically ±2 semitones
+                    // Center = 8192, range 0-16383
+                    double semitones = event.expressionValue;
+                    int pitchBend = static_cast<int>(8192 + (semitones / 2.0) * 8192);
+                    pitchBend = std::clamp(pitchBend, 0, 16383);
+                    midiEvent.data1 = static_cast<uint8_t>(pitchBend & 0x7F);        // LSB
+                    midiEvent.data2 = static_cast<uint8_t>((pitchBend >> 7) & 0x7F); // MSB
+                    outputMidiEvents.push_back(midiEvent);
+                }
+            }
+        }
+
+        currentSample += opts.bufferSize;
+        process.steady_time = static_cast<int64_t>(currentSample);
+    }
+
+    plugin->stop_processing(plugin);
+    plugin->deactivate(plugin);
+    plugin->destroy(plugin);
+
+    // Summary
+    printf("\n");
+    printf("Summary:\n");
+    printf("  Input:  %zu note-on, %zu note-off\n", inputNoteOns, inputNoteOffs);
+    printf("  Output: %zu note-on, %zu note-off, %zu expressions\n",
+           outputNoteOns, outputNoteOffs, outputExpressions);
+
+    if (velocityCount > 0) {
+        printf("  Note events processed: %zu\n", velocityCount);
+    }
+
+    bool passed = (inputNoteOns == outputNoteOns && inputNoteOffs == outputNoteOffs);
+    if (passed) {
+        printf("\n✓ Note counts match (plugin passed notes through)\n");
+    } else {
+        printf("\n⚠ Note counts differ (plugin may be filtering or generating notes)\n");
+    }
+
+    if (outputExpressions > 0) {
+        printf("✓ Plugin generated %zu expression events (pitch bend, etc.)\n", outputExpressions);
+    }
+
+    // Write output MIDI file if requested
+    if (opts.outputFile && !outputMidiEvents.empty()) {
+        if (MidiFile::save(opts.outputFile, outputMidiEvents, midi->tempo())) {
+            printf("\nOutput MIDI: %s (%zu events)\n", opts.outputFile, outputMidiEvents.size());
+        } else {
+            fprintf(stderr, "\nERROR: Failed to write output MIDI file\n");
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+//-----------------------------------------------------------------------------
 // Main
 //-----------------------------------------------------------------------------
 
@@ -883,6 +1178,8 @@ int main(int argc, char* argv[]) {
         return cmdProcess(opts);
     } else if (strcmp(opts.command, "state") == 0) {
         return cmdState(opts);
+    } else if (strcmp(opts.command, "notes") == 0) {
+        return cmdNotes(opts);
     } else {
         fprintf(stderr, "Unknown command: %s\n\n", opts.command);
         printUsage(argv[0]);

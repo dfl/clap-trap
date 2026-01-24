@@ -373,13 +373,18 @@ bool MidiFile::save(const char* path,
     trackData.push_back(static_cast<uint8_t>(microsecondsPerQuarter & 0xFF));
 
     // Convert events to ticks and sort
+    // Sort by tick, then by type (note-on before note-off at same tick)
     std::vector<std::pair<uint32_t, const MidiEvent*>> sortedEvents;
     for (const auto& event : events) {
         uint32_t tick = static_cast<uint32_t>(event.secondTime * ticksPerQuarter * tempo / 60.0);
         sortedEvents.push_back({tick, &event});
     }
-    std::sort(sortedEvents.begin(), sortedEvents.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::stable_sort(sortedEvents.begin(), sortedEvents.end(),
+              [](const auto& a, const auto& b) {
+                  if (a.first != b.first) return a.first < b.first;
+                  // At same tick: note-on (0x90) before note-off (0x80)
+                  return a.second->type > b.second->type;
+              });
 
     // Write events
     uint32_t lastTick = 0;
